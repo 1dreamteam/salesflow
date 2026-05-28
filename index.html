@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SalesFlow</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -219,9 +220,10 @@ input:focus,select:focus{border-color:var(--blue);}
     <button class="tab" onclick="setView('kwartal')">Kwartal</button>
     <button class="tab" onclick="setView('wpisy')">Wpisy</button>
   </div>
-  <div class="header-btns">
+      <div class="header-btns">
     <div class="status"><div class="sdot load" id="sdot"></div><span id="stxt">Laczenie...</span></div>
     <button class="hbtn" onclick="loadAll()">Odswiez</button>
+    <button class="hbtn" onclick="logout()" style="color:#ff6b35;border-color:#2a1a0a;">Wyloguj</button>
     <button class="hbtn primary" id="addBtn" onclick="openModal()">+ Dodaj wyniki</button>
   </div>
 </div>
@@ -234,6 +236,8 @@ input:focus,select:focus{border-color:var(--blue);}
 const SB_URL = 'https://nbkofdtdemzjwcravvda.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ia29mZHRkZW16andjcmF2dmRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5OTM4MDMsImV4cCI6MjA5NTU2OTgwM30.ghJUpBx_0j6ebU5pcGz73hw2xp7t13skt2ILj9bmMPc';
 const ADMIN_PIN = '1234';
+const TEAM_LOGIN = 'zespol';
+const TEAM_PASS = 'Wyniki123!';
 const Q_GOAL = 13500;
 
 let view = 'tydzien';
@@ -241,6 +245,51 @@ let entries = [];
 let qEntries = [];
 let editingId = null;
 let isAdmin = false;
+let isLoggedIn = false;
+
+function checkLogin() {
+  const saved = sessionStorage.getItem('sf_auth');
+  if(saved === 'ok') { isLoggedIn = true; return true; }
+  return false;
+}
+
+function showLoginScreen() {
+  document.getElementById('main').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:80vh;">
+      <div style="background:#0e0e1a;border:1px solid #1e1e35;border-radius:20px;padding:40px;width:360px;text-align:center;">
+        <div style="font-size:40px;margin-bottom:16px;">⚡</div>
+        <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#00d4ff,#b14aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;">SalesFlow</div>
+        <div style="font-size:12px;color:#444;margin-bottom:28px;">Panel zespolu sprzedazowego</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+          <input id="loginInput" type="text" placeholder="Login" style="background:#12121e;border:1px solid #1e1e35;border-radius:8px;padding:11px 14px;color:#fff;font-size:14px;font-family:Inter,sans-serif;outline:none;text-align:center;">
+          <input id="passInput" type="password" placeholder="Haslo" style="background:#12121e;border:1px solid #1e1e35;border-radius:8px;padding:11px 14px;color:#fff;font-size:14px;font-family:Inter,sans-serif;outline:none;text-align:center;">
+        </div>
+        <div id="loginErr" style="color:#ff4444;font-size:12px;margin-bottom:12px;min-height:16px;"></div>
+        <button onclick="tryLogin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#00d4ff,#b14aed);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">Zaloguj sie</button>
+      </div>
+    </div>`;
+  document.getElementById('passInput').addEventListener('keydown', e => { if(e.key==='Enter') tryLogin(); });
+}
+
+function tryLogin() {
+  const login = document.getElementById('loginInput').value.trim();
+  const pass = document.getElementById('passInput').value;
+  if(login === TEAM_LOGIN && pass === TEAM_PASS) {
+    sessionStorage.setItem('sf_auth', 'ok');
+    isLoggedIn = true;
+    loadAll();
+  } else {
+    document.getElementById('loginErr').textContent = 'Bledny login lub haslo!';
+    document.getElementById('passInput').value = '';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('sf_auth');
+  isLoggedIn = false;
+  isAdmin = false;
+  showLoginScreen();
+}
 
 const headers = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
 
@@ -259,6 +308,7 @@ async function sb(method, table, body, id) {
 }
 
 async function loadAll() {
+  if(!isLoggedIn) return;
   setStatus('load', 'Pobieranie...');
   try {
     const [e, q] = await Promise.all([
@@ -519,8 +569,7 @@ function renderEntries() {
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function confetti(){ const w=document.getElementById('cfw'); const cols=['#00d4ff','#b14aed','#00ff88','#ff6b35','#ff2d92','#ffd700']; for(let i=0;i<70;i++){ const el=document.createElement('div'); el.className='cfp'; const c=cols[Math.floor(Math.random()*cols.length)]; el.style.cssText=`left:${Math.random()*100}%;width:${5+Math.random()*7}px;height:${5+Math.random()*7}px;background:${c};border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*.4}s;`; w.appendChild(el); setTimeout(()=>el.remove(),3200); } }
 
-loadAll();
-setInterval(loadAll, 30000);
+if(!checkLogin()) { showLoginScreen(); } else { loadAll(); }
 </script>
 </body>
 </html>
