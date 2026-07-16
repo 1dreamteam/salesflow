@@ -413,7 +413,7 @@ let editingId=null,isAdmin=false,isLoggedIn=false;
 let dayStarted=false,agentName='',currentAct=null;
 let actTimers={zimna:0,reklamowana:0,leady:0,grupowka:0,stare:0,przerwa:0};
 let actStart=null,timerInterval=null;
-let dayTel=0,daySpot=0,currentTip='';
+let dayStartTime = null;
 let isDark=localStorage.getItem('sf_theme')==='dark';
 
 // THEME
@@ -519,8 +519,21 @@ function openSummary(){
 async function finishDay(){
   const z=+document.getElementById('sumZycie').value||0,g=+document.getElementById('sumGrup').value||0,m=+document.getElementById('sumMaj').value||0;
   const today=new Date().toISOString().split('T')[0];
+  const endTime=new Date();
+  const fmt=d=>`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   try{
-    await fetch(`${SB_URL}/rest/v1/entries`,{method:'POST',headers:{...H,'Prefer':'return=minimal'},body:JSON.stringify({date:today,agent:agentName,tel:dayTel,spot:daySpot,zycie:z,grup:g,maj:m,note:'via Daily Assistant'})});
+    await fetch(`${SB_URL}/rest/v1/entries`,{method:'POST',headers:{...H,'Prefer':'return=minimal'},body:JSON.stringify({
+      date:today,agent:agentName,tel:dayTel,spot:daySpot,zycie:z,grup:g,maj:m,
+      note:'via Daily Assistant',
+      start_time:dayStartTime?fmt(dayStartTime):'',
+      end_time:fmt(endTime),
+      act_zimna:actTimers.zimna,
+      act_reklamowana:actTimers.reklamowana,
+      act_leady:actTimers.leady,
+      act_grupowka:actTimers.grupowka,
+      act_stare:actTimers.stare,
+      act_przerwa:actTimers.przerwa
+    })});
     document.getElementById('summaryOverlay').classList.remove('show');
     dayStarted=false;dayTel=0;daySpot=0;actTimers={zimna:0,reklamowana:0,leady:0,grupowka:0,stare:0,przerwa:0};currentAct=null;
     showToast('Świetna robota '+agentName+'! Wyniki zapisane ✓');setTimeout(confetti,300);
@@ -787,26 +800,77 @@ function renderKwartal(){
   setTimeout(()=>document.querySelectorAll('.prog-fill[data-t]').forEach(el=>{el.style.width=el.dataset.t+'%';if(parseInt(el.dataset.t)>=100)setTimeout(confetti,400);}),80);
 }
 
+let expandedEntry=null;
+
+function toggleEntry(id){expandedEntry=expandedEntry===id?null:id;renderEntries();}
+
 function renderEntries(){
   const sorted=[...entries].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const actDefs=[
+    {key:'act_zimna',icon:'❄️',name:'Zimna Baza'},
+    {key:'act_reklamowana',icon:'🔄',name:'Baza Reklamowana'},
+    {key:'act_leady',icon:'🎯',name:'Leady'},
+    {key:'act_grupowka',icon:'👥',name:'Pod Grupówkę'},
+    {key:'act_stare',icon:'📋',name:'Stare Kontakty'},
+    {key:'act_przerwa',icon:'☕',name:'Przerwa'},
+  ];
+
   document.getElementById('main').innerHTML=`
     <div class="page-title">Wszystkie wpisy</div>
     <div class="page-sub">${sorted.length} rekordów w bazie danych</div>
     <div class="card">
-      ${sorted.length?sorted.map(e=>`
-        <div class="entry-row">
-          <span style="color:var(--text2);font-size:11px">${e.date}</span>
-          <span style="font-weight:500;font-size:13px">${e.agent}</span>
-          <span style="text-align:center;color:var(--accent);font-weight:600;font-size:12px">${e.tel} tel</span>
-          <span style="text-align:center;color:var(--success);font-weight:600;font-size:12px">${e.spot} spot</span>
-          <div class="cat-pills">
-            ${e.zycie?`<span class="pill pill-z">Ż:${e.zycie}</span>`:''}
-            ${e.grup?`<span class="pill pill-g">G:${e.grup}</span>`:''}
-            ${e.maj?`<span class="pill pill-m">M:${e.maj}</span>`:''}
+      ${sorted.length?sorted.map(e=>{
+        const hasDetail=e.start_time||actDefs.some(a=>e[a.key]>0);
+        const totalActSec=actDefs.reduce((s,a)=>s+(e[a.key]||0),0);
+        const maxAct=Math.max(...actDefs.map(a=>e[a.key]||0),1);
+        const isExpanded=expandedEntry===e.id;
+        return `
+        <div style="border-bottom:1px solid var(--border);padding:10px 0;">
+          <div style="display:grid;grid-template-columns:88px 1fr 55px 55px 1fr auto auto auto;gap:8px;align-items:center;font-size:12px;">
+            <span style="color:var(--text2);font-size:11px">${e.date}</span>
+            <div>
+              <div style="font-weight:500;font-size:13px">${e.agent}</div>
+              ${e.start_time?`<div style="font-size:10px;color:var(--text3)">🕐 ${e.start_time}${e.end_time?' — '+e.end_time:''}</div>`:''}
+            </div>
+            <span style="text-align:center;color:var(--accent);font-weight:600">${e.tel} tel</span>
+            <span style="text-align:center;color:var(--success);font-weight:600">${e.spot} spot</span>
+            <div class="cat-pills">
+              ${e.zycie?`<span class="pill pill-z">Ż:${e.zycie}</span>`:''}
+              ${e.grup?`<span class="pill pill-g">G:${e.grup}</span>`:''}
+              ${e.maj?`<span class="pill pill-m">M:${e.maj}</span>`:''}
+            </div>
+            ${hasDetail?`<button class="action-btn" onclick="toggleEntry(${e.id})" style="${isExpanded?'color:var(--accent);border-color:var(--accent)':''}">${isExpanded?'Zwiń ▲':'Szczegóły ▼'}</button>`:'<div></div>'}
+            <button class="action-btn" onclick="checkAdmin(()=>editEntry(${e.id}))">Edytuj</button>
+            <button class="action-btn danger" onclick="checkAdmin(()=>deleteEntry(${e.id}))">Usuń</button>
           </div>
-          <button class="action-btn" onclick="checkAdmin(()=>editEntry(${e.id}))">Edytuj</button>
-          <button class="action-btn danger" onclick="checkAdmin(()=>deleteEntry(${e.id}))">Usuń</button>
-        </div>`).join(''):'<div class="empty"><div class="empty-icon">📋</div><p>Brak wpisów</p></div>'}
+
+          ${isExpanded&&hasDetail?`
+          <div style="margin:10px 0 4px;background:var(--bg);border-radius:10px;padding:14px 16px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Czas per aktywność</div>
+            ${actDefs.filter(a=>e[a.key]>0).sort((a,b)=>(e[b.key]||0)-(e[a.key]||0)).map(a=>{
+              const sec=e[a.key]||0;
+              const pct=Math.round(sec/maxAct*100);
+              const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+              const timeStr=h>0?`${h}h ${m}m`:`${m}m ${s}s`;
+              const totalPct=totalActSec>0?Math.round(sec/totalActSec*100):0;
+              return `
+              <div style="margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-size:12px;font-weight:500;color:var(--text)">${a.icon} ${a.name}</span>
+                  <div style="display:flex;gap:10px;align-items:center;">
+                    <span style="font-size:11px;color:var(--text3)">${totalPct}% czasu</span>
+                    <span style="font-size:12px;font-weight:600;color:var(--accent)">${timeStr}</span>
+                  </div>
+                </div>
+                <div style="height:5px;background:var(--border);border-radius:4px;overflow:hidden;">
+                  <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;"></div>
+                </div>
+              </div>`;
+            }).join('')}
+            ${totalActSec>0?`<div style="font-size:11px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">Łączny czas pracy: <strong style="color:var(--text)">${Math.floor(totalActSec/3600)}h ${Math.floor((totalActSec%3600)/60)}m</strong></div>`:''}
+          </div>`:''}
+        </div>`;
+      }).join(''):'<div class="empty"><div class="empty-icon">📋</div><p>Brak wpisów</p></div>'}
     </div>`;
 }
 
@@ -848,7 +912,22 @@ function closeQModal(){document.getElementById('qoverlay').classList.remove('sho
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 function confetti(){const w=document.getElementById('cfw');const cols=['#2563EB','#22C55E','#F59E0B','#EF4444','#7C3AED','#0891B2'];for(let i=0;i<60;i++){const el=document.createElement('div');el.className='cfp';const c=cols[Math.floor(Math.random()*cols.length)];el.style.cssText=`left:${Math.random()*100}%;width:${5+Math.random()*6}px;height:${5+Math.random()*6}px;background:${c};border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*.4}s;`;w.appendChild(el);setTimeout(()=>el.remove(),3000);}}
 
-if(!checkLogin()){renderLogin();}else{loadAll();setInterval(loadAll,30000);}
+async function silentRefresh(){
+  if(!isLoggedIn) return;
+  try{
+    const[e,q]=await Promise.all([
+      fetch(`${SB_URL}/rest/v1/entries?order=date.desc&limit=500`,{headers:H}).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/q_entries?order=pts.desc`,{headers:H}).then(r=>r.json())
+    ]);
+    entries=Array.isArray(e)?e:[];
+    qEntries=Array.isArray(q)?q:[];
+    setStatus('ok',entries.length+' wpisów');
+    // odswież widok tylko jeśli nie jesteś w Moim Dniu
+    if(view!=='dzien_pracy') render();
+  }catch(e){ setStatus('err','Brak połączenia'); }
+}
+
+if(!checkLogin()){renderLogin();}else{loadAll();setInterval(silentRefresh,30000);}
 </script>
 </body>
 </html>
