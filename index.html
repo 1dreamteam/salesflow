@@ -359,6 +359,25 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   </div>
 </div>
 
+<!-- AI FAB -->
+<button id="ai-fab" onclick="toggleAI()" title="AI Coach" style="position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(37,99,235,.4);z-index:300;transition:all .2s;display:flex;align-items:center;justify-content:center;">🤖</button>
+
+<!-- AI PANEL -->
+<div id="ai-panel" style="position:fixed;bottom:88px;right:24px;width:360px;height:500px;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);z-index:299;display:none;opacity:0;transition:opacity .2s;flex-direction:column;overflow:hidden;">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--accent);border-radius:16px 16px 0 0;">
+    <div>
+      <div style="font-size:14px;font-weight:700;color:#fff;">🤖 AI Coach</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.7);">Twój asystent sprzedażowy</div>
+    </div>
+    <button onclick="aiMessages=[];renderAIMessages();aiGreet();" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:Inter,sans-serif;">Nowa rozmowa</button>
+  </div>
+  <div id="ai-messages" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;"></div>
+  <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;">
+    <input id="ai-input" type="text" placeholder="Napisz obiekcję klienta lub pytanie..." onkeydown="if(event.key==='Enter')sendAIMessage()" style="flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;font-family:Inter,sans-serif;outline:none;">
+    <button onclick="sendAIMessage()" style="width:36px;height:36px;border-radius:8px;background:var(--accent);color:#fff;border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">↑</button>
+  </div>
+</div>
+
 <div class="header">
   <div class="logo"><div class="logo-icon">🚀</div>SalesFlow</div>
   <nav class="nav">
@@ -638,6 +657,19 @@ function renderWorkPanel(){
         </div>
       </div>
 
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Szybkie pytania do AI Coach</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${[
+            'Klient mówi że jest za drogo',
+            'Klient nie ma czasu rozmawiać',
+            'Jak otworzyć rozmowę?',
+            'Klient już ma ubezpieczenie',
+            'Zmotywuj mnie!'
+          ].map(q=>`<button onclick="document.getElementById('ai-input').value='${q}';toggleAI();setTimeout(sendAIMessage,100)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;font-family:Inter,sans-serif;transition:all .15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">${q}</button>`).join('')}
+        </div>
+      </div>
+
       <button class="end-day-btn" onclick="openSummary()">Zakończ dzień i zapisz wyniki →</button>
     </div>`;
   if(currentAct)startTimer();
@@ -908,6 +940,130 @@ function openQModal(a=''){const agents=[...new Set(entries.map(e=>e.agent))];doc
 function closeQModal(){document.getElementById('qoverlay').classList.remove('show');}
 
 ['overlay','qoverlay','summaryOverlay'].forEach(id=>{document.getElementById(id).addEventListener('click',e=>{if(e.target===e.currentTarget)document.getElementById(id).classList.remove('show');});});
+
+// ===== AI COACH =====
+let aiMessages = [];
+let aiOpen = false;
+let aiTyping = false;
+
+const AI_SYSTEM = `Jesteś AI Coachem zespołu sprzedażowego agentów ubezpieczeniowych w Polsce. Pracujesz dla firmy korzystającej z aplikacji SalesFlow.
+
+Twoja rola:
+- Pomagasz agentom radzić sobie z obiekcjami klientów
+- Motywujesz i wspierasz w trudnych momentach dnia
+- Dajesz konkretne skrypty sprzedażowe i odpowiedzi na obiekcje
+- Doradzasz jak prowadzić rozmowę z klientem
+- Znasz produkty: ubezpieczenia na życie, grupowe, majątkowe
+
+Styl komunikacji:
+- Bezpośredni, konkretny, energiczny
+- Po polsku
+- Krótkie odpowiedzi (max 3-4 zdania) chyba że agent pyta o skrypt
+- Używasz imienia agenta jeśli je znasz
+- Dajesz gotowe frazy do użycia w rozmowie z klientem
+
+Przy obiekcjach zawsze podaj:
+1. Jak zareagować (1 zdanie)
+2. Gotową odpowiedź do klienta (w cudzysłowie)`;
+
+function toggleAI() {
+  aiOpen = !aiOpen;
+  const panel = document.getElementById('ai-panel');
+  const fab = document.getElementById('ai-fab');
+  if(aiOpen) {
+    panel.style.display = 'flex';
+    setTimeout(() => panel.style.opacity = '1', 10);
+    fab.textContent = '✕';
+    if(aiMessages.length === 0) aiGreet();
+    setTimeout(() => document.getElementById('ai-input')?.focus(), 100);
+  } else {
+    panel.style.opacity = '0';
+    setTimeout(() => panel.style.display = 'none', 200);
+    fab.textContent = '🤖';
+  }
+}
+
+function aiGreet() {
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Dzień dobry' : hour < 18 ? 'Cześć' : 'Dobry wieczór';
+  const name = agentName || 'Agentce/Agencie';
+  const targets = `Dzisiaj cel to **60 telefonów**, **3 spotkania** i **1 sprzedaż**. `;
+  const tips = [
+    'Zacznij od zimnej bazy — rano klienci są najbardziej dostępni! 💪',
+    'Pamiętaj: każde "nie" przybliża Cię do "tak"! 🎯',
+    'Skup się na pierwszych 10 telefonach — wejdziesz w rytm! 🔥',
+  ];
+  const tip = tips[Math.floor(Math.random() * tips.length)];
+  addAIMessage('assistant', `${greet}, **${name}**! 👋\n\n${targets}${tip}\n\nJak mogę Ci dzisiaj pomóc? Możesz zapytać o obiekcje klienta, skrypt rozmowy lub po prostu napisz co Cię blokuje!`);
+}
+
+function addAIMessage(role, content) {
+  aiMessages.push({role, content});
+  renderAIMessages();
+}
+
+function renderAIMessages() {
+  const list = document.getElementById('ai-messages');
+  if(!list) return;
+  list.innerHTML = aiMessages.map(m => `
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;${m.role==='user'?'flex-direction:row-reverse':''}">
+      <div style="width:28px;height:28px;border-radius:50%;background:${m.role==='assistant'?'var(--accent)':'var(--border)'};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">
+        ${m.role==='assistant'?'🤖':'👤'}
+      </div>
+      <div style="max-width:80%;background:${m.role==='assistant'?'var(--accent-light)':'var(--bg)'};border:1px solid ${m.role==='assistant'?'rgba(37,99,235,.15)':'var(--border)'};border-radius:${m.role==='assistant'?'4px 12px 12px 12px':'12px 4px 12px 12px'};padding:10px 13px;font-size:13px;color:var(--text);line-height:1.5;">
+        ${m.content.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}
+      </div>
+    </div>
+  `).join('') + (aiTyping ? `
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;">🤖</div>
+      <div style="background:var(--accent-light);border:1px solid rgba(37,99,235,.15);border-radius:4px 12px 12px 12px;padding:10px 13px;">
+        <div style="display:flex;gap:4px;align-items:center;">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink .8s infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink .8s .2s infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink .8s .4s infinite;"></div>
+        </div>
+      </div>
+    </div>` : '');
+  list.scrollTop = list.scrollHeight;
+}
+
+async function sendAIMessage() {
+  const input = document.getElementById('ai-input');
+  if(!input || aiTyping) return;
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  addAIMessage('user', text);
+  aiTyping = true;
+  renderAIMessages();
+
+  try {
+    const messages = [
+      ...aiMessages.slice(0,-1).map(m => ({role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content})),
+      {role: 'user', content: (agentName ? `[Agent: ${agentName}] ` : '') + text}
+    ];
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: AI_SYSTEM,
+        messages
+      })
+    });
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Przepraszam, spróbuj ponownie.';
+    aiTyping = false;
+    addAIMessage('assistant', reply);
+  } catch(e) {
+    aiTyping = false;
+    addAIMessage('assistant', 'Błąd połączenia z AI. Sprawdź internet i spróbuj ponownie.');
+    renderAIMessages();
+  }
+}
 
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 function confetti(){const w=document.getElementById('cfw');const cols=['#2563EB','#22C55E','#F59E0B','#EF4444','#7C3AED','#0891B2'];for(let i=0;i<60;i++){const el=document.createElement('div');el.className='cfp';const c=cols[Math.floor(Math.random()*cols.length)];el.style.cssText=`left:${Math.random()*100}%;width:${5+Math.random()*6}px;height:${5+Math.random()*6}px;background:${c};border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*.4}s;`;w.appendChild(el);setTimeout(()=>el.remove(),3000);}}
